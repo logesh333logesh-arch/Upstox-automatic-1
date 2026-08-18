@@ -1,0 +1,38 @@
+name: Scanner2 - Premium Spike Scanner
+
+# Market hours-ல every 3 minutes run ஆகும் (9:17 AM - 3:30 PM IST)
+# IST = UTC + 5:30 -> 3:47 AM - 10:00 AM UTC
+on:
+  schedule:
+    - cron: "*/3 3-9 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  scan-spikes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Repo checkout
+        uses: actions/checkout@v4
+
+      - name: Python setup
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Dependencies install
+        run: pip install -r requirements.txt
+
+      - name: Scanner run
+        env:
+          UPSTOX_ACCESS_TOKEN: ${{ secrets.UPSTOX_ACCESS_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scanner.py
+
+      - name: Alerted-strikes file commit பண்ணு (duplicate alerts தவிர்க்க)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add alerted_strikes.json
+          git commit -m "Alerted strikes update - $(date)" || echo "No changes"
+          git push
