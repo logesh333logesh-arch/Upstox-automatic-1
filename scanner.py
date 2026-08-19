@@ -167,8 +167,9 @@ def main():
         if cfg["has_monthly"]:
             check_spikes_for_symbol(name, cfg, "MONTHLY", baseline, alerted)
 
-    for name, cfg in MCX_COMMODITIES.items():
-        check_spikes_for_symbol(name, cfg, "MONTHLY", baseline, alerted)
+    # MCX commodities - Upstox option chain API MCX-க்கு support இல்லாததால DISABLE
+    # for name, cfg in MCX_COMMODITIES.items():
+    #     check_spikes_for_symbol(name, cfg, "MONTHLY", baseline, alerted)
 
     save_alerted(alerted)
     print("Scanner run முடிந்தது.")
