@@ -168,8 +168,12 @@ def main():
         if cfg["has_monthly"]:
             capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline)
 
-    for name, cfg in MCX_COMMODITIES.items():
-        capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline, is_mcx=True)
+    # MCX commodities - Upstox API currently option chain support MCX-க்கு இல்லாததால
+    # (Upstox official docs: "Option chain currently not available for MCX Exchange"),
+    # இப்போதைக்கு DISABLE பண்ணிருக்கோம். பின்னாடி வேற data source (Opstra/Quantsapp)
+    # வெச்சு separate-ஆ approach பண்ணலாம்.
+    # for name, cfg in MCX_COMMODITIES.items():
+    #     capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline, is_mcx=True)
 
     with open(BASELINE_FILE, "w") as f:
         json.dump(baseline, f, indent=2)
