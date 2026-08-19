@@ -10,6 +10,7 @@ Weekly + Monthly (applicable-ஆ இருக்கிறதுக்கு) ATM
 
 import os
 import json
+import gzip
 import requests
 from config import INDICES, MCX_COMMODITIES, BASELINE_FILE
 
@@ -18,6 +19,61 @@ HEADERS = {
     "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
     "Accept": "application/json",
 }
+
+INSTRUMENTS_URL = "https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz"
+_instruments_cache = None
+
+
+def load_instruments_master():
+    """
+    Upstox full instruments master file download பண்ணி cache பண்றது.
+    MCX commodities-க்கு exact instrument_key இதுல இருந்து தான் கண்டுபிடிக்க முடியும்
+    (hardcode பண்ண முடியாது, internal numeric token இருக்கும்).
+    """
+    global _instruments_cache
+    if _instruments_cache is not None:
+        return _instruments_cache
+
+    print("[INFO] Instruments master file download பண்றேன்...")
+    resp = requests.get(INSTRUMENTS_URL, timeout=60)
+    resp.raise_for_status()
+    raw = gzip.decompress(resp.content)
+    _instruments_cache = json.loads(raw)
+    print(f"[INFO] {len(_instruments_cache)} instruments load ஆனது.")
+    return _instruments_cache
+
+
+def get_mcx_futures_instrument_key(commodity_name):
+    """
+    MCX commodity-க்கு (CRUDEOIL/NATURALGAS/GOLD) nearest-expiry FUTURES
+    contract-ன் instrument_key-ஐ master file-ல இருந்து கண்டுபிடிக்கும்.
+    இதுவே ATM base price (spot substitute) calculate பண்ண பயன்படும்.
+    """
+    instruments = load_instruments_master()
+    matches = [
+        i for i in instruments
+        if i.get("segment") == "MCX_FO"
+        and i.get("instrument_type") == "FUT"
+        and i.get("asset_symbol", "").upper() == commodity_name.upper()
+    ]
+    if not matches:
+        # fallback: name field-ல commodity name start ஆகுதான்னு பாரு
+        matches = [
+            i for i in instruments
+            if i.get("segment") == "MCX_FO"
+            and i.get("instrument_type") == "FUT"
+            and i.get("name", "").upper().startswith(commodity_name.upper())
+        ]
+    if not matches:
+        raise Exception(
+            f"[MCX LOOKUP FAIL] '{commodity_name}' க்கு MCX_FO futures contract "
+            f"instruments master-ல கிடைக்கல. Symbol name மாறியிருக்கலாம்."
+        )
+    # Nearest expiry contract எடு
+    matches.sort(key=lambda x: x.get("expiry", ""))
+    nearest = matches[0]
+    print(f"[MCX FUT] {commodity_name} -> {nearest['instrument_key']} (expiry {nearest.get('expiry')})")
+    return nearest["instrument_key"]
 
 
 def get_spot_price(underlying_key):
@@ -78,11 +134,16 @@ def select_otm_strikes(chain_data, spot_price, num_strikes):
     return strikes[atm_index: atm_index + num_strikes]
 
 
-def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekly, baseline):
-    print(f"[TRY] {symbol_name}_{contract_type} - underlying_key='{symbol_config['underlying_key']}'")
-    spot = get_spot_price(symbol_config["underlying_key"])
-    expiry = get_nearest_expiry(symbol_config["underlying_key"], weekly=weekly)
-    chain_data = fetch_option_chain(symbol_config["underlying_key"], expiry)
+def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekly, baseline, is_mcx=False):
+    if is_mcx:
+        underlying_key = get_mcx_futures_instrument_key(symbol_name)
+    else:
+        underlying_key = symbol_config["underlying_key"]
+
+    print(f"[TRY] {symbol_name}_{contract_type} - underlying_key='{underlying_key}'")
+    spot = get_spot_price(underlying_key)
+    expiry = get_nearest_expiry(underlying_key, weekly=weekly)
+    chain_data = fetch_option_chain(underlying_key, expiry)
     selected = select_otm_strikes(chain_data, spot, symbol_config["otm_strikes"])
 
     key = f"{symbol_name}_{contract_type}"
@@ -108,7 +169,7 @@ def main():
             capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline)
 
     for name, cfg in MCX_COMMODITIES.items():
-        capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline)
+        capture_baseline_for_symbol(name, cfg, "MONTHLY", False, baseline, is_mcx=True)
 
     with open(BASELINE_FILE, "w") as f:
         json.dump(baseline, f, indent=2)
