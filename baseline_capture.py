@@ -25,7 +25,15 @@ def get_spot_price(underlying_key):
     params = {"instrument_key": underlying_key}
     resp = requests.get(url, headers=HEADERS, params=params)
     resp.raise_for_status()
-    data = resp.json()["data"]
+    body = resp.json()
+    data = body.get("data", {})
+    if not data:
+        raise Exception(
+            f"[SPOT PRICE FAIL] instrument_key='{underlying_key}' க்கு data காலியா "
+            f"வந்துச்சு. Full response: {body}. "
+            f"இந்த instrument_key தப்பா இருக்கலாம் - Upstox instruments master "
+            f"file-ல verify பண்ணு."
+        )
     first_key = list(data.keys())[0]
     return data[first_key]["last_price"]
 
@@ -71,6 +79,7 @@ def select_otm_strikes(chain_data, spot_price, num_strikes):
 
 
 def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekly, baseline):
+    print(f"[TRY] {symbol_name}_{contract_type} - underlying_key='{symbol_config['underlying_key']}'")
     spot = get_spot_price(symbol_config["underlying_key"])
     expiry = get_nearest_expiry(symbol_config["underlying_key"], weekly=weekly)
     chain_data = fetch_option_chain(symbol_config["underlying_key"], expiry)
