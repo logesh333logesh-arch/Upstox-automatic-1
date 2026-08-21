@@ -138,9 +138,13 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
                 if ik is not None:
                     current_ltp_by_key[ik] = ltp
 
-    for strike_symbol, open_premium in strikes_baseline.items():
+    for strike_symbol, strike_info in strikes_baseline.items():
         if strike_symbol.endswith("_expiry"):
             continue
+
+        open_premium = strike_info["premium"]
+        strike_price = strike_info["strike"]
+        option_type = strike_info["option_type"]
 
         current_premium = current_ltp_by_key.get(strike_symbol)
         if current_premium is None:
@@ -149,7 +153,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
 
         spike = current_premium - open_premium
         print(
-            f"[CHECK] {key} | {strike_symbol} | open=₹{open_premium} "
+            f"[CHECK] {key} | Strike {strike_price} {option_type} | open=₹{open_premium} "
             f"current=₹{current_premium} spike=₹{round(spike,2)} threshold=₹{threshold}"
         )
 
@@ -157,15 +161,16 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
         if spike >= threshold and alert_key not in alerted:
             msg = (
                 f"🚨 Premium Spike Alert\n"
-                f"Symbol: {strike_symbol}\n"
+                f"Index: {symbol_name}\n"
                 f"Contract: {contract_type}\n"
+                f"Strike: {strike_price} {option_type}\n"
                 f"Opening Premium: ₹{open_premium}\n"
                 f"Current Premium: ₹{current_premium}\n"
                 f"Spike: ₹{round(spike, 2)} (Threshold: ₹{threshold})"
             )
             send_telegram_alert(msg)
             alerted[alert_key] = True
-            print(f"[ALERT SENT] {strike_symbol} - spike ₹{spike}")
+            print(f"[ALERT SENT] {symbol_name} {strike_price}{option_type} - spike ₹{spike}")
 
 
 # -----------------------------------------------------------
