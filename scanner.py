@@ -98,7 +98,10 @@ def save_alerted(alerted):
 # -----------------------------------------------------------
 def send_telegram_alert(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    # parse_mode Markdown எடுத்துடுறோம் - strike symbols-ல '_' '|' போன்ற
+    # characters இருக்கும், அது Markdown-ஐ confuse பண்ணி 400 error தரும்.
+    # Plain text-ஆ அனுப்பினா எந்த character வந்தாலும் problem வராது.
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
     resp = requests.post(url, json=payload)
     resp.raise_for_status()
 
@@ -153,7 +156,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
         alert_key = f"{key}_{strike_symbol}"
         if spike >= threshold and alert_key not in alerted:
             msg = (
-                f"🚨 *Premium Spike Alert*\n"
+                f"🚨 Premium Spike Alert\n"
                 f"Symbol: {strike_symbol}\n"
                 f"Contract: {contract_type}\n"
                 f"Opening Premium: ₹{open_premium}\n"
