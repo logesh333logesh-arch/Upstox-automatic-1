@@ -116,24 +116,33 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
         return
 
     threshold = symbol_config["spike_threshold"]
-    strikes_baseline = baseline[key]  # { "NIFTY_24000_CE": 120.5, ... }
+    strikes_baseline = baseline[key]  # { "NSE_FO|12345": 120.5, ... } - key is instrument_key
 
     # Current premiums fetch பண்ணு (option chain call)
     chain_data = fetch_option_chain(
         symbol_config["underlying_key"], baseline[key + "_expiry"]
     )
 
+    # chain_data-ல இருந்து instrument_key -> current LTP dictionary build பண்ணு
+    # (baseline-ல instrument_key வெச்சு தான் save பண்ணோம், trading_symbol இல்ல -
+    #  இது தான் முன்ன alert வராம இருந்ததுக்கு காரணம்)
+    current_ltp_by_key = {}
+    for c in chain_data:
+        for opt_type in ["call_options", "put_options"]:
+            if opt_type in c and c[opt_type]:
+                ik = c[opt_type].get("instrument_key")
+                ltp = c[opt_type].get("market_data", {}).get("ltp")
+                if ik is not None:
+                    current_ltp_by_key[ik] = ltp
+
     for strike_symbol, open_premium in strikes_baseline.items():
         if strike_symbol.endswith("_expiry"):
             continue
 
-        current = next(
-            (c for c in chain_data if c.get("trading_symbol") == strike_symbol), None
-        )
-        if not current:
+        current_premium = current_ltp_by_key.get(strike_symbol)
+        if current_premium is None:
             continue
 
-        current_premium = current.get("last_price", 0)
         spike = current_premium - open_premium
 
         alert_key = f"{key}_{strike_symbol}"
