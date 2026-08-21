@@ -141,9 +141,14 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
 
         current_premium = current_ltp_by_key.get(strike_symbol)
         if current_premium is None:
+            print(f"[NO MATCH] {strike_symbol} - current chain data-ல இந்த instrument_key கிடைக்கல")
             continue
 
         spike = current_premium - open_premium
+        print(
+            f"[CHECK] {key} | {strike_symbol} | open=₹{open_premium} "
+            f"current=₹{current_premium} spike=₹{round(spike,2)} threshold=₹{threshold}"
+        )
 
         alert_key = f"{key}_{strike_symbol}"
         if spike >= threshold and alert_key not in alerted:
