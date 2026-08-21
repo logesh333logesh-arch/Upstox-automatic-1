@@ -149,12 +149,19 @@ def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekl
     key = f"{symbol_name}_{contract_type}"
     baseline[key] = {}
     for s in selected:
-        # CE and PE ரெண்டையும் store பண்ணு
-        for opt_type in ["call_options", "put_options"]:
-            if opt_type in s:
+        # CE and PE ரெண்டையும் store பண்ணு - இப்போ premium மட்டும் இல்ல,
+        # strike price, option type (CE/PE) இதுவும் சேர்த்து store பண்றோம்
+        # (Telegram message-ல தெளிவா காமிக்க இதுவே தேவை)
+        strike_price = s.get("strike_price")
+        for opt_type, label in [("call_options", "CE"), ("put_options", "PE")]:
+            if opt_type in s and s[opt_type]:
                 sym = s[opt_type]["instrument_key"]
                 premium = s[opt_type]["market_data"]["ltp"]
-                baseline[key][sym] = premium
+                baseline[key][sym] = {
+                    "premium": premium,
+                    "strike": strike_price,
+                    "option_type": label,
+                }
     baseline[key + "_expiry"] = expiry
     print(f"[BASELINE SET] {key} - {len(selected)} strikes, expiry {expiry}")
 
