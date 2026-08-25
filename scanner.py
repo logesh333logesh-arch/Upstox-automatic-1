@@ -159,11 +159,21 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
 
         alert_key = f"{key}_{strike_symbol}"
         if spike >= threshold and alert_key not in alerted:
+            # CE/PE மற்றும் Weekly/Monthly-க்கு தனி emoji - ஒரே பார்வையில
+            # அடையாளம் தெரிய (பச்சை=Call, சிவப்பு=Put)
+            option_emoji = "🟢" if option_type == "CE" else "🔴"
+            contract_emoji = "⏳" if contract_type == "WEEKLY" else "📅"
+            index_emoji = {
+                "NIFTY": "💸",
+                "BANKNIFTY": "🏛️",
+                "SENSEX": "💰",
+                "FINNIFTY": "🧷",
+            }.get(symbol_name, "⚪")
             msg = (
                 f"🚨 Premium Spike Alert\n"
-                f"Index: {symbol_name}\n"
-                f"Contract: {contract_type}\n"
-                f"Strike: {strike_price} {option_type}\n"
+                f"Index: {index_emoji} {symbol_name}\n"
+                f"Contract: {contract_emoji} {contract_type}\n"
+                f"Strike: {strike_price} {option_emoji} {option_type}\n"
                 f"Opening Premium: ₹{open_premium}\n"
                 f"Current Premium: ₹{current_premium}\n"
                 f"Spike: ₹{round(spike, 2)} (Threshold: ₹{threshold})"
