@@ -126,12 +126,21 @@ def fetch_option_chain(underlying_key, expiry_date):
 
 
 def select_otm_strikes(chain_data, spot_price, num_strikes):
+    """
+    ATM கண்டுபிடிச்சு, CE-க்கும் PE-க்கும் தனித்தனியா OTM strikes எடுக்கும்:
+    - CE OTM = ATM-க்கு மேல (spot-ஐ விட அதிக strike)
+    - PE OTM = ATM-க்கு கீழ் (spot-ஐ விட குறைந்த strike)
+    (முன்ன ரெண்டுக்கும் ஒரே "ATM-க்கு மேல" range-ஐ use பண்ணி, PE தப்பா
+    ITM ஆகிடுச்சு - அதை இப்போ fix பண்றோம்)
+    """
     strikes = sorted(chain_data, key=lambda x: x["strike_price"])
     atm_index = min(
         range(len(strikes)),
         key=lambda i: abs(strikes[i]["strike_price"] - spot_price),
     )
-    return strikes[atm_index: atm_index + num_strikes]
+    ce_otm_strikes = strikes[atm_index: atm_index + num_strikes]        # ATM-க்கு மேல -> CE OTM
+    pe_otm_strikes = strikes[max(0, atm_index - num_strikes): atm_index]  # ATM-க்கு கீழ் -> PE OTM
+    return ce_otm_strikes, pe_otm_strikes
 
 
 def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekly, baseline, is_mcx=False):
@@ -144,26 +153,35 @@ def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekl
     spot = get_spot_price(underlying_key)
     expiry = get_nearest_expiry(underlying_key, weekly=weekly)
     chain_data = fetch_option_chain(underlying_key, expiry)
-    selected = select_otm_strikes(chain_data, spot, symbol_config["otm_strikes"])
+    ce_strikes, pe_strikes = select_otm_strikes(chain_data, spot, symbol_config["otm_strikes"])
 
     key = f"{symbol_name}_{contract_type}"
     baseline[key] = {}
-    for s in selected:
-        # CE and PE ரெண்டையும் store பண்ணு - இப்போ premium மட்டும் இல்ல,
-        # strike price, option type (CE/PE) இதுவும் சேர்த்து store பண்றோம்
-        # (Telegram message-ல தெளிவா காமிக்க இதுவே தேவை)
-        strike_price = s.get("strike_price")
-        for opt_type, label in [("call_options", "CE"), ("put_options", "PE")]:
-            if opt_type in s and s[opt_type]:
-                sym = s[opt_type]["instrument_key"]
-                premium = s[opt_type]["market_data"]["ltp"]
-                baseline[key][sym] = {
-                    "premium": premium,
-                    "strike": strike_price,
-                    "option_type": label,
-                }
+
+    # CE OTM strikes-ல இருந்து CALL premium மட்டும் store பண்ணு
+    for s in ce_strikes:
+        if "call_options" in s and s["call_options"]:
+            sym = s["call_options"]["instrument_key"]
+            premium = s["call_options"]["market_data"]["ltp"]
+            baseline[key][sym] = {
+                "premium": premium,
+                "strike": s.get("strike_price"),
+                "option_type": "CE",
+            }
+
+    # PE OTM strikes-ல இருந்து PUT premium மட்டும் store பண்ணு
+    for s in pe_strikes:
+        if "put_options" in s and s["put_options"]:
+            sym = s["put_options"]["instrument_key"]
+            premium = s["put_options"]["market_data"]["ltp"]
+            baseline[key][sym] = {
+                "premium": premium,
+                "strike": s.get("strike_price"),
+                "option_type": "PE",
+            }
+
     baseline[key + "_expiry"] = expiry
-    print(f"[BASELINE SET] {key} - {len(selected)} strikes, expiry {expiry}")
+    print(f"[BASELINE SET] {key} - {len(ce_strikes)} CE + {len(pe_strikes)} PE strikes, expiry {expiry}")
 
 
 def main():
@@ -190,3 +208,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+  
