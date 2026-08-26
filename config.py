@@ -19,6 +19,7 @@ INDICES = {
         "has_monthly": True,
         "spike_threshold": 15,
         "otm_strikes": 10,
+        "itm_strikes": 5,
     },
     "BANKNIFTY": {
         "underlying_key": "NSE_INDEX|Nifty Bank",
@@ -27,6 +28,7 @@ INDICES = {
         "has_monthly": True,
         "spike_threshold": 15,
         "otm_strikes": 10,
+        "itm_strikes": 5,
     },
     "SENSEX": {
         "underlying_key": "BSE_INDEX|SENSEX",
@@ -35,6 +37,7 @@ INDICES = {
         "has_monthly": True,
         "spike_threshold": 15,
         "otm_strikes": 10,
+        "itm_strikes": 5,
     },
     "FINNIFTY": {
         "underlying_key": "NSE_INDEX|Nifty Fin Service",
@@ -43,6 +46,7 @@ INDICES = {
         "has_monthly": True,
         "spike_threshold": 15,
         "otm_strikes": 10,
+        "itm_strikes": 5,
     },
 }
 
