@@ -125,22 +125,23 @@ def fetch_option_chain(underlying_key, expiry_date):
     return resp.json()["data"]
 
 
-def select_otm_strikes(chain_data, spot_price, num_strikes):
+def select_strikes(chain_data, spot_price, otm_count, itm_count):
     """
-    ATM கண்டுபிடிச்சு, CE-க்கும் PE-க்கும் தனித்தனியா OTM strikes எடுக்கும்:
-    - CE OTM = ATM-க்கு மேல (spot-ஐ விட அதிக strike)
-    - PE OTM = ATM-க்கு கீழ் (spot-ஐ விட குறைந்த strike)
-    (முன்ன ரெண்டுக்கும் ஒரே "ATM-க்கு மேல" range-ஐ use பண்ணி, PE தப்பா
-    ITM ஆகிடுச்சு - அதை இப்போ fix பண்றோம்)
+    ATM கண்டுபிடிச்சு, CE-க்கும் PE-க்கும் தனித்தனியா OTM + ITM strikes எடுக்கும்:
+    - CE OTM = ATM-க்கு மேல (otm_count), CE ITM = ATM-க்கு கீழ் (itm_count)
+    - PE OTM = ATM-க்கு கீழ் (otm_count), PE ITM = ATM-க்கு மேல் (itm_count)
+    (ITM/OTM திசை Call/Put-க்கு எதிர் எதிர் என்பதால இப்படி தனித்தனியா)
     """
     strikes = sorted(chain_data, key=lambda x: x["strike_price"])
     atm_index = min(
         range(len(strikes)),
         key=lambda i: abs(strikes[i]["strike_price"] - spot_price),
     )
-    ce_otm_strikes = strikes[atm_index: atm_index + num_strikes]        # ATM-க்கு மேல -> CE OTM
-    pe_otm_strikes = strikes[max(0, atm_index - num_strikes): atm_index]  # ATM-க்கு கீழ் -> PE OTM
-    return ce_otm_strikes, pe_otm_strikes
+    ce_otm = strikes[atm_index: atm_index + otm_count]
+    ce_itm = strikes[max(0, atm_index - itm_count): atm_index]
+    pe_otm = strikes[max(0, atm_index - otm_count): atm_index]
+    pe_itm = strikes[atm_index: atm_index + itm_count]
+    return ce_otm, ce_itm, pe_otm, pe_itm
 
 
 def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekly, baseline, is_mcx=False):
@@ -153,35 +154,35 @@ def capture_baseline_for_symbol(symbol_name, symbol_config, contract_type, weekl
     spot = get_spot_price(underlying_key)
     expiry = get_nearest_expiry(underlying_key, weekly=weekly)
     chain_data = fetch_option_chain(underlying_key, expiry)
-    ce_strikes, pe_strikes = select_otm_strikes(chain_data, spot, symbol_config["otm_strikes"])
+    ce_otm, ce_itm, pe_otm, pe_itm = select_strikes(
+        chain_data, spot, symbol_config["otm_strikes"], symbol_config["itm_strikes"]
+    )
 
     key = f"{symbol_name}_{contract_type}"
     baseline[key] = {}
 
-    # CE OTM strikes-ல இருந்து CALL premium மட்டும் store பண்ணு
-    for s in ce_strikes:
-        if "call_options" in s and s["call_options"]:
-            sym = s["call_options"]["instrument_key"]
-            premium = s["call_options"]["market_data"]["ltp"]
-            baseline[key][sym] = {
-                "premium": premium,
-                "strike": s.get("strike_price"),
-                "option_type": "CE",
-            }
+    def store_strikes(strike_list, opt_field, opt_label, moneyness):
+        for s in strike_list:
+            if opt_field in s and s[opt_field]:
+                sym = s[opt_field]["instrument_key"]
+                premium = s[opt_field]["market_data"]["ltp"]
+                baseline[key][sym] = {
+                    "premium": premium,
+                    "strike": s.get("strike_price"),
+                    "option_type": opt_label,
+                    "moneyness": moneyness,
+                }
 
-    # PE OTM strikes-ல இருந்து PUT premium மட்டும் store பண்ணு
-    for s in pe_strikes:
-        if "put_options" in s and s["put_options"]:
-            sym = s["put_options"]["instrument_key"]
-            premium = s["put_options"]["market_data"]["ltp"]
-            baseline[key][sym] = {
-                "premium": premium,
-                "strike": s.get("strike_price"),
-                "option_type": "PE",
-            }
+    store_strikes(ce_otm, "call_options", "CE", "OTM")
+    store_strikes(ce_itm, "call_options", "CE", "ITM")
+    store_strikes(pe_otm, "put_options", "PE", "OTM")
+    store_strikes(pe_itm, "put_options", "PE", "ITM")
 
     baseline[key + "_expiry"] = expiry
-    print(f"[BASELINE SET] {key} - {len(ce_strikes)} CE + {len(pe_strikes)} PE strikes, expiry {expiry}")
+    print(
+        f"[BASELINE SET] {key} - CE(OTM {len(ce_otm)}, ITM {len(ce_itm)}) "
+        f"PE(OTM {len(pe_otm)}, ITM {len(pe_itm)}), expiry {expiry}"
+    )
 
 
 def main():
@@ -208,4 +209,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-  
