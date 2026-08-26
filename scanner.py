@@ -145,6 +145,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
         open_premium = strike_info["premium"]
         strike_price = strike_info["strike"]
         option_type = strike_info["option_type"]
+        moneyness = strike_info.get("moneyness", "OTM")
 
         current_premium = current_ltp_by_key.get(strike_symbol)
         if current_premium is None:
@@ -163,6 +164,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
             # அடையாளம் தெரிய (பச்சை=Call, சிவப்பு=Put)
             option_emoji = "🟢" if option_type == "CE" else "🔴"
             contract_emoji = "⏳" if contract_type == "WEEKLY" else "📅"
+            moneyness_emoji = "ℹ️" if moneyness == "ITM" else "🅾️"
             index_emoji = {
                 "NIFTY": "💸",
                 "BANKNIFTY": "🏛️",
@@ -173,7 +175,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
                 f"🚨 Premium Spike Alert\n"
                 f"Index: {index_emoji} {symbol_name}\n"
                 f"Contract: {contract_emoji} {contract_type}\n"
-                f"Strike: {strike_price} {option_emoji} {option_type}\n"
+                f"Strike: {strike_price} {option_emoji} {option_type} ({moneyness_emoji} {moneyness})\n"
                 f"Opening Premium: ₹{open_premium}\n"
                 f"Current Premium: ₹{current_premium}\n"
                 f"Spike: ₹{round(spike, 2)} (Threshold: ₹{threshold})"
