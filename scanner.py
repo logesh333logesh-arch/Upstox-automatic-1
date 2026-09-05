@@ -120,10 +120,11 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
 
     threshold = symbol_config["spike_threshold"]
     strikes_baseline = baseline[key]  # { "NSE_FO|12345": 120.5, ... } - key is instrument_key
+    expiry_used = baseline.get(key + "_expiry", "N/A")
 
     # Current premiums fetch பண்ணு (option chain call)
     chain_data = fetch_option_chain(
-        symbol_config["underlying_key"], baseline[key + "_expiry"]
+        symbol_config["underlying_key"], expiry_used
     )
 
     # chain_data-ல இருந்து instrument_key -> current LTP dictionary build பண்ணு
@@ -176,6 +177,7 @@ def check_spikes_for_symbol(symbol_name, symbol_config, contract_type, baseline,
                 f"Index: {index_emoji} {symbol_name}\n"
                 f"Contract: {contract_emoji} {contract_type}\n"
                 f"Strike: {strike_price} {option_emoji} {option_type} ({moneyness_emoji} {moneyness})\n"
+                f"Expiry: {expiry_used}\n"
                 f"Opening Premium: ₹{open_premium}\n"
                 f"Current Premium: ₹{current_premium}\n"
                 f"Spike: ₹{round(spike, 2)} (Threshold: ₹{threshold})"
@@ -211,3 +213,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+       
