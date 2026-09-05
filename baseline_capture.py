@@ -12,8 +12,11 @@ import os
 import json
 import gzip
 import requests
+import pytz
+from datetime import datetime, date
 from config import INDICES, MCX_COMMODITIES, BASELINE_FILE
 
+IST = pytz.timezone("Asia/Kolkata")
 UPSTOX_ACCESS_TOKEN = os.environ["UPSTOX_ACCESS_TOKEN"]
 HEADERS = {
     "Authorization": f"Bearer {UPSTOX_ACCESS_TOKEN}",
@@ -97,24 +100,43 @@ def get_spot_price(underlying_key):
 def get_nearest_expiry(underlying_key, weekly=True):
     """
     Upstox /option/contract endpoint எல்லா available expiries கொடுக்கும்.
-    Weekly=True na nearest expiry edukkanum, False na (monthly) andha
-    month-oda last expiry edukkanum.
+    Weekly=True na nearest expiry edukkanum (indru expiry naal-um SERI, past
+    illama), False na (monthly) andha month-oda last expiry edukkanum.
+
+    Bug fix: முன்ன "expiries[0]" (string-sorted முதலாவது) எடுத்தோம் - ஆனா
+    expiry day அன்னிக்கே, Upstox சில நேரம் list order மாறி, "இன்னிக்கு"
+    expiry-க்கு பதிலா "அடுத்த வாரம்" expiry முதலாவதா வந்திடுச்சு. இப்போ
+    today's date-ஐ விட முன்னாடி இல்லாத (>=today) expiries-ல இருந்து மட்டும்
+    நெருக்கமான ஒண்ணை explicit-ஆ தேர்ந்தெடுக்கிறோம்.
     """
     url = "https://api.upstox.com/v2/option/contract"
     params = {"instrument_key": underlying_key}
     resp = requests.get(url, headers=HEADERS, params=params)
     resp.raise_for_status()
     contracts = resp.json()["data"]
-    expiries = sorted(set(c["expiry"] for c in contracts))
+    all_expiries = sorted(set(c["expiry"] for c in contracts))
+    print(f"[EXPIRY LIST] {underlying_key} -> {all_expiries}")
+
+    today_ist = datetime.now(IST).date()
+    parsed = [(datetime.strptime(e, "%Y-%m-%d").date(), e) for e in all_expiries]
+    upcoming = sorted([p for p in parsed if p[0] >= today_ist], key=lambda p: p[0])
 
     if weekly:
-        return expiries[0]  # nearest expiry
+        if not upcoming:
+            raise Exception(
+                f"[EXPIRY FAIL] {underlying_key} - இன்னிக்கு ({today_ist}) அல்லது "
+                f"அதுக்கு பிறகான expiry ஒண்ணும் கிடைக்கல. All expiries: {all_expiries}"
+            )
+        chosen = upcoming[0][1]
+        print(f"[EXPIRY CHOSEN] weekly -> {chosen} (today={today_ist})")
+        return chosen
 
-    # monthly = current month-oda last expiry date
-    from datetime import datetime
-    current_month = datetime.now().month
-    month_expiries = [e for e in expiries if datetime.strptime(e, "%Y-%m-%d").month == current_month]
-    return month_expiries[-1] if month_expiries else expiries[-1]
+    # monthly = current month-oda last expiry date (இன்னிக்கை விட முன்ன இல்லாதது)
+    current_month = today_ist.month
+    month_expiries = [e for d, e in upcoming if d.month == current_month]
+    chosen = month_expiries[-1] if month_expiries else (upcoming[-1][1] if upcoming else all_expiries[-1])
+    print(f"[EXPIRY CHOSEN] monthly -> {chosen} (today={today_ist})")
+    return chosen
 
 
 def fetch_option_chain(underlying_key, expiry_date):
@@ -209,3 +231,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+  
